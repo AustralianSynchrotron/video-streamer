@@ -379,25 +379,40 @@ class RedisCamera(Camera):
         The inner while loop continuously polls images.
         """
         self._output = output
+        reconnected = True  # Assume connected at start
         while True:
-            with MD3RedisClient(self.camera_args) as md3_redis_client:
-                while True:
-                    try:
-                        frame_bytes = self.get_camera_image(md3_redis_client)
-                        self._write_data(bytearray(frame_bytes))
-                    except ConnectionError as ce:
-                        logger.error(
-                            f"Redis connection lost: {ce}, reconnecting..."
-                        )
-                        self._emit_placeholder_image(ce)
-                        sleep(0.02)
-                        break
-                    except Exception as e:
-                        logger.error(
-                            f"Error in image generator: {e}"
-                        )
-                        self._emit_placeholder_image(e)
-                        break
+            try:
+                self._poll_image()
+                if not reconnected:
+                    logger.info("[mxcube-video-streamer] Reconnected to Redis.")
+                    reconnected = True
+            except Exception as e:
+                if reconnected:
+                    logger.error(f"[mxcube-video-streamer] Error in _poll_image: {e}. Attempting to reconnect...")
+                    reconnected = False
+                self._emit_placeholder_image(e)
+                sleep(0.1)
+
+
+    def _poll_image(self) -> None:
+        with MD3RedisClient(self.camera_args) as md3_redis_client:
+            while True:
+                try:
+                    frame_bytes = self.get_camera_image(md3_redis_client)
+                    self._write_data(bytearray(frame_bytes))
+                except ConnectionError as ce:
+                    logger.error(
+                        f"[mxcube-video-streamer] Redis connection lost: {ce}, reconnecting..."
+                    )
+                    self._emit_placeholder_image(ce)
+                    sleep(0.1)
+                    break
+                except Exception as e:
+                    logger.error(
+                        f"[mxcube-video-streamer] Error in image generator: {e}. Emitting placeholder image..."
+                    )
+                    self._emit_placeholder_image(e)
+                    break
 
 
     def get_camera_image(self, md3_redis_client: MD3RedisClient) -> bytes:
@@ -420,8 +435,11 @@ class RedisCamera(Camera):
             return self.placeholder_img_bytes
         
     def _emit_placeholder_image(self, exception: Exception) -> None:
-        logger.error(f"Emitting placeholder image due to error: {exception}")
-        self._write_data(bytearray(self.placeholder_img_bytes))
+        try:
+            logger.error(f"[mxcube-video-streamer] Emitting placeholder image due to error: {exception}")
+            self._write_data(bytearray(self.placeholder_img_bytes))
+        except Exception as e:
+            logger.error(f"[mxcube-video-streamer] Failed to emit placeholder image: {e}")
 
 
 class TestCamera(Camera):
