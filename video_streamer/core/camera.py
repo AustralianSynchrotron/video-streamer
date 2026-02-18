@@ -379,37 +379,44 @@ class RedisCamera(Camera):
         it will keep trying to reconnect and poll images.
         """
         self._output = output
-        reconnected = True
+        self.reconnected = True
         while True:
             try:
                 with MD3RedisClient(self.camera_args) as md3_redis_client:
-                    if not reconnected:
+                    if not self.reconnected:
                         logger.info("[mxcube-video-streamer] Reconnected to Redis.")
-                        reconnected = True
+                        self.reconnected = True
                     self._poll_image(md3_redis_client)
+                
             except Exception as e:
-                if reconnected:
+                if self.reconnected:
                     logger.error(f"[mxcube-video-streamer] Error in poll_image: {e}. Attempting to reconnect...")
-                    reconnected = False
+                    self.reconnected = False
                 self._emit_placeholder_image(e)
                 sleep(0.1)
 
 
     def _poll_image(self, md3_redis_client: MD3RedisClient) -> None:
+        start_time = perf_counter()
         while True:
             try:
                 frame_bytes = self.get_camera_image(md3_redis_client)
+                elapsed_time = perf_counter() - start_time
+                if int(elapsed_time) % 5 == 0 and int(elapsed_time) != 0:
+                    raise RuntimeError("Simulated error for testing reconnection logic.")
                 self._write_data(bytearray(frame_bytes))
             except ConnectionError as ce:
+                self.reconnected = False
                 logger.error(
-                    f"[mxcube-video-streamer] Redis connection lost: {ce}, reconnecting..."
+                    f"[mxcube-video-streamer] Redis connection lost: {ce}, reconnecting and emitting placeholder image"
                 )
                 self._emit_placeholder_image(ce)
                 sleep(0.1)
                 break
             except Exception as e:
+                self.reconnected = False
                 logger.error(
-                    f"[mxcube-video-streamer] Error in image generator: {e}. Emitting placeholder image..."
+                    f"[mxcube-video-streamer] Error in image generator: {e}. Reconnecting and emitting placeholder image"
                 )
                 self._emit_placeholder_image(e)
                 break
