@@ -380,14 +380,20 @@ class RedisCamera(Camera):
         """
         self._output = output
         self.reconnected = True
+        error_interval = 5  # seconds
+        last_error_time = time.time()
         while True:
             try:
+                # Simulate error every error_interval seconds
+                current_time = time.time()
+                if current_time - last_error_time >= error_interval:
+                    last_error_time = current_time
+                    raise Exception("Simulated error in poll_image")
                 with MD3RedisClient(self.camera_args) as md3_redis_client:
                     if not self.reconnected:
                         logger.info("[mxcube-video-streamer] Reconnected to Redis.")
                         self.reconnected = True
-                    self._poll_image(md3_redis_client)
-                
+                    self._poll_image(md3_redis_client, error_interval)
             except Exception as e:
                 if self.reconnected:
                     logger.error(f"[mxcube-video-streamer] Error in poll_image: {e}. Attempting to reconnect...")
@@ -396,9 +402,15 @@ class RedisCamera(Camera):
                 sleep(0.1)
 
 
-    def _poll_image(self, md3_redis_client: MD3RedisClient) -> None:
+    def _poll_image(self, md3_redis_client: MD3RedisClient, error_interval: float = 5) -> None:
+        last_error_time = time.time()
         while True:
             try:
+                # Simulate error every error_interval seconds
+                current_time = time.time()
+                if current_time - last_error_time >= error_interval:
+                    last_error_time = current_time
+                    raise Exception("Simulated error in _poll_image")
                 frame_bytes = self.get_camera_image(md3_redis_client)
                 self._write_data(bytearray(frame_bytes))
             except ConnectionError as ce:
