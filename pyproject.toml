@@ -3,7 +3,7 @@ name = "mxcube_video_streamer"
 version = "1.8.4.2"
 description = "FastAPI Based video streamer"
 authors = [{ name = "Marcus Oskarsson", email = "oscarsso@esrf.fr" }]
-requires-python = ">=3.10,<3.12"
+requires-python = ">=3.11,<3.12"
 readme = "README.md"
 license = "MIT"
 maintainers = [{ name = "Marcus Oskarsson", email = "oscarsso@esrf.fr" }]
